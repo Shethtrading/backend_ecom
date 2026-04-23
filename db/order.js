@@ -1,5 +1,5 @@
 const { Pool } = require("pg");
-const nodemailer = require("nodemailer"); 
+const nodemailer = require("nodemailer");
 const fs = require("fs");
 const handlebars = require("handlebars");
 const axios = require("axios")
@@ -8,8 +8,10 @@ const { sendEmail } = require("../utils/sendemail");
 
 require("dotenv").config();  // works locally, ignored on Railway
 
+const DEFAULT_SIGNATURE_URL = "https://res.cloudinary.com/deudvpcgx/image/upload/v1776436828/3d8496fc-69d8-4beb-8589-ebe63ae17406_yqrpyk.png";
+
 const pool = new Pool({
-    connectionString: process.env.DB_CONNECTION_STRING  
+  connectionString: process.env.DB_CONNECTION_STRING
 });
 
 const transporter = nodemailer.createTransport({
@@ -30,6 +32,36 @@ async function executeQuery(query, values = []) {
   } finally {
     client.release();
   }
+}
+
+let ensureLineOrderReady;
+
+async function ensureLineOrderColumn() {
+  if (!ensureLineOrderReady) {
+    ensureLineOrderReady = (async () => {
+      await executeQuery(`
+        ALTER TABLE order_details
+        ADD COLUMN IF NOT EXISTS line_order INTEGER;
+      `);
+
+      await executeQuery(`
+        WITH ranked AS (
+          SELECT
+            ctid,
+            ROW_NUMBER() OVER (PARTITION BY cart_id ORDER BY order_id ASC) AS rn
+          FROM order_details
+          WHERE cart_id IS NOT NULL
+            AND line_order IS NULL
+        )
+        UPDATE order_details od
+        SET line_order = ranked.rn
+        FROM ranked
+        WHERE od.ctid = ranked.ctid;
+      `);
+    })();
+  }
+
+  return ensureLineOrderReady;
 }
 
 async function storeDataInDb(orderDetails, orderId) {
@@ -54,7 +86,7 @@ async function storeDataInDb(orderDetails, orderId) {
   try {
     const result = await executeQuery(query, values);
     console.log("Data inserted successfully:", result[0]);
-    return result[0]; 
+    return result[0];
   } catch (error) {
     console.error("Error inserting data:", error);
     throw error;
@@ -91,7 +123,7 @@ async function userDb(name, company_name, email, phone) {
       `;
       const updateValues = [name, company_name, phone, email];
       const updateResult = await executeQuery(updateQuery, updateValues);
-      
+
       console.log("User data updated successfully:", updateResult[0]);
       return updateResult[0].id;
     } else {
@@ -103,7 +135,7 @@ async function userDb(name, company_name, email, phone) {
       `;
       const insertValues = [name, company_name, email, phone];
       const insertResult = await executeQuery(insertQuery, insertValues);
-      
+
       console.log("User data inserted successfully:", insertResult[0]);
       return insertResult[0].id;
     }
@@ -116,6 +148,7 @@ async function userDb(name, company_name, email, phone) {
 
 async function processOrderData(orderIds, email, status) {
   try {
+    await ensureLineOrderColumn();
     console.log(orderIds, email, status)
     const userQuery = "SELECT id FROM user_details WHERE email = $1";
     const userResult = await executeQuery(userQuery, [email]);
@@ -137,22 +170,23 @@ async function processOrderData(orderIds, email, status) {
 
     const cartId = cartResult[0].id;
 
-    for (const orderId of orderIds) {
+    for (const [index, orderId] of orderIds.entries()) {
       const orderQuery = 'SELECT sku, quantity FROM order_details WHERE order_id = $1';
       const orderResults = await executeQuery(orderQuery, [orderId]);
 
       if (orderResults.length > 0) {
         const updateOrderQuery = `
           UPDATE order_details
-          SET cart_id = $1
-          WHERE order_id = $2`;
-        await executeQuery(updateOrderQuery, [cartId, orderId]);
+          SET cart_id = $1,
+              line_order = $2
+          WHERE order_id = $3`;
+        await executeQuery(updateOrderQuery, [cartId, index + 1, orderId]);
       } else {
         console.warn(`Order ID ${orderId} not found in order_details`);
       }
     }
     console.log(cartId)
-    return {cartId}
+    return { cartId }
   } catch (error) {
     console.error("Error in processOrderData:", error);
     throw error;
@@ -165,7 +199,13 @@ async function getCartDetails(orderId) {
 }
 
 async function getALLCartDetails(cartId) {
-  const query = 'SELECT * FROM order_details WHERE cart_id = $1';
+  await ensureLineOrderColumn();
+  const query = `
+    SELECT *
+    FROM order_details
+    WHERE cart_id = $1
+    ORDER BY COALESCE(line_order, 2147483647), order_id ASC
+  `;
   return await executeQuery(query, [cartId]);
 }
 
@@ -176,34 +216,51 @@ async function getContacts() {
 
 async function updateCart(quantity, order_id) {
   const query = 'UPDATE order_details SET quantity = $1 WHERE order_id = $2 RETURNING *';
-  const result = await executeQuery(query, [ quantity, order_id]);
+  const result = await executeQuery(query, [quantity, order_id]);
   if (result && result.length > 0) {
-    return result[0]; 
+    return result[0];
   } else {
-    throw new Error("No rows returned from update query"); 
+    throw new Error("No rows returned from update query");
   }
 }
 
 async function deleteCartItem(order_id) {
   const query = 'DELETE FROM order_details WHERE order_id = $1 RETURNING *';
   const result = await executeQuery(query, [order_id]);
-  
+
   if (result && result.length > 0) {
-    return result[0]; 
+    return result[0];
   } else {
     throw new Error("No rows deleted, item may not exist");
   }
 }
 
 async function enquireMail(email, cart_id, subject) {
+  console.log("[DEBUG] enquireMail() called with:", { email, cart_id, subject });
+
   try {
-    const query = `SELECT name, quantity FROM order_details WHERE cart_id = $1`;
+    await ensureLineOrderColumn();
+    const query = `
+      SELECT name, quantity
+      FROM order_details
+      WHERE cart_id = $1
+      ORDER BY COALESCE(line_order, 2147483647), order_id ASC
+    `;
+    console.log("[DEBUG] Executinag query for cart_id:", cart_id);
     const result = await executeQuery(query, [cart_id]);
+    console.log("[DEBUG] Query result:", result);
+    console.log("[DEBUG] Number of items found:", result.length);
+
+    if (result.length === 0) {
+      console.log("[DEBUG] WARNING: No items found for cart_id:", cart_id);
+    }
 
     // Compile template
     const templatePath = path.join(__dirname, "templates", "emailTemplate.hbs");
+    console.log("[DEBUG] Template path:", templatePath);
     const templateSource = fs.readFileSync(templatePath, "utf-8");
     const template = handlebars.compile(templateSource);
+    console.log("[DEBUG] Template compiled successfully");
 
     handlebars.registerHelper("inc", v => parseInt(v) + 1);
 
@@ -211,32 +268,32 @@ async function enquireMail(email, cart_id, subject) {
       name: row.name,
       quantity: row.quantity
     }));
+    console.log("[DEBUG] Items for email:", items);
 
-    const htmlMessage = template({ cart_id, items });
+    const signatureUrl = process.env.SIGNATURE_IMAGE_URL || DEFAULT_SIGNATURE_URL;
+    console.log("[DEBUG] Signature URL used:", signatureUrl);
 
-    // Load signature image as Base64
-    const signPath = path.resolve(__dirname, "templates", "signature_sheth.png");
-    const signatureBase64 = fs.readFileSync(signPath).toString("base64");
+    const htmlMessage = template({ cart_id, items, signatureUrl });
+    console.log("[DEBUG] HTML message generated (length):", htmlMessage.length);
 
-    const attachments = [
-      {
-        filename: "signature_sheth.png",
-        content: signatureBase64,
-      },
-    ];
+    console.log("[DEBUG] Calling sendEmail()...");
+    console.log("[DEBUG] sendEmail params:", { to: email, subject });
 
     await sendEmail({
       to: email,
       subject,
       html: htmlMessage,
-      attachments
+      attachments: []
     });
 
+    console.log("[DEBUG] sendEmail() completed successfully!");
     return true;
 
   } catch (err) {
-    console.error("Error sending enquiry email:", err);
-    throw new Error("Error sending enquiry email");
+    console.error("[DEBUG] ERROR in enquireMail:", err);
+    console.error("[DEBUG] Error message:", err.message);
+    console.error("[DEBUG] Error stack:", err.stack);
+    throw new Error("Error sending enquiry email: " + err.message);
   }
 }
 
@@ -276,9 +333,7 @@ async function quotation_mail(cart_id, reply, hs, dow, m3, urls) {
       })
     );
 
-    // Load signature
-    const signPath = path.resolve(__dirname, "templates", "signature_sheth.png");
-    const signatureBase64 = fs.readFileSync(signPath).toString("base64");
+    const signatureUrl = process.env.SIGNATURE_IMAGE_URL || DEFAULT_SIGNATURE_URL;
 
     // Compile HTML email
     const templatePath = path.join(__dirname, "templates", "quotation.hbs");
@@ -289,19 +344,14 @@ async function quotation_mail(cart_id, reply, hs, dow, m3, urls) {
       name,
       cart_id,
       reply,
+      signatureUrl
     });
 
     await sendEmail({
       to: email,
       subject: "Here is your Quotation",
       html: htmlMessage,
-      attachments: [
-        ...pdfAttachments,
-        {
-          filename: "signature_sheth.png",
-          content: signatureBase64,
-        }
-      ]
+      attachments: pdfAttachments
     });
 
     return true;
@@ -326,4 +376,4 @@ const insertUserMessage = async (name, email, phone, subject, body) => {
   return await executeQuery(query, [name, email, phone, subject, body]);
 };
 
-module.exports = { getContacts, insertSubscription, insertUserMessage, quotation_mail,getALLCartDetails, storeDataInDb, userDb,findUserByEmail, processOrderData, getCartDetails, updateCart, deleteCartItem, enquireMail };
+module.exports = { getContacts, insertSubscription, insertUserMessage, quotation_mail, getALLCartDetails, storeDataInDb, userDb, findUserByEmail, processOrderData, getCartDetails, updateCart, deleteCartItem, enquireMail };

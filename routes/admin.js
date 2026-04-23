@@ -78,21 +78,54 @@ router.post("/quotation", async (req, res) => {
 
         const cart_id = items[0]?.cart_id;
 
+        const normalizedDeliveryCharges = Number(Delivery_Charges);
+        if (!Number.isFinite(normalizedDeliveryCharges) || normalizedDeliveryCharges < 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Delivery_Charges must be a valid non-negative number.",
+          });
+        }
+
         for (const data of items) {
             const { cart_id, order_id, rate, discount, delivery } = data;
 
-            if (!cart_id || !order_id || rate == null || delivery == null) {
+          if (!cart_id || !order_id || rate == null || delivery == null) {
                 return res.status(400).json({
                     success: false,
                     message: "Missing required fields in one of the items.",
                 });
             }
 
-            await quotation(rate, discount, order_id, cart_id, delivery);
+          const normalizedRate = Number(rate);
+          const normalizedDiscount = discount === "" || discount == null ? 0 : Number(discount);
+          const normalizedDelivery = delivery === "" || delivery == null ? 0 : Number(delivery);
+
+          if (!Number.isFinite(normalizedRate) || normalizedRate < 0) {
+            return res.status(400).json({
+              success: false,
+              message: `Invalid rate for order_id ${order_id}.`,
+            });
+          }
+
+          if (!Number.isFinite(normalizedDiscount) || normalizedDiscount < 0) {
+            return res.status(400).json({
+              success: false,
+              message: `Invalid discount for order_id ${order_id}.`,
+            });
+          }
+
+          if (!Number.isFinite(normalizedDelivery) || normalizedDelivery < 0) {
+            return res.status(400).json({
+              success: false,
+              message: `Invalid delivery for order_id ${order_id}.`,
+            });
+          }
+
+          await quotation(normalizedRate, normalizedDiscount, order_id, cart_id, normalizedDelivery);
         }
         
         const response = await fetchAndCategorizeData(cart_id);
-        const pdf_url= await finalizeQuotation(cart_id, response.heatshrink, response.dowells, response.m3, Payment, Validity, Delivery_Charges);
+        const pdf_url= await finalizeQuotation(cart_id, response.heatshrink, response.dowells, response.m3, Payment, Validity, normalizedDeliveryCharges);
         const urls = [];
 
         if (pdf_url?.heatshrinkDetails) urls.push(pdf_url.heatshrinkDetails);

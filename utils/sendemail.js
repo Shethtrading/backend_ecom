@@ -19,6 +19,8 @@ async function sendEmail({ to, subject, html, text, attachments = [] }) {
     return response;
   } catch (err) {
     console.error("Resend ERROR:", err);
+    console.error("Error message:", err.message);
+    console.error("Error details:", err.response);
     throw err;
   }
 }

@@ -34,6 +34,9 @@ const s3 = new AWS.S3({
 
 async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charge,cart_id, name, company_name) {
   try {
+    const orderedItems = Array.isArray(quotationDetails.items) ? quotationDetails.items : [];
+    const orderedQuotationDetails = { ...quotationDetails, items: orderedItems };
+
     // Load HTML template
     const templatePath = path.join(__dirname, 'templates', 'invoice-template.handlebars');
     const templateHtml = fs.readFileSync(templatePath, 'utf8');
@@ -42,7 +45,7 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
     const template = Handlebars.compile(templateHtml);
     
     // Calculate totals
-    const totalAmount = quotationDetails.items.reduce(
+    const totalAmount = orderedItems.reduce(
       (sum, item) => sum + item.rate * item.quantity,
       0
     );
@@ -60,7 +63,7 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
     const context = {
       logo: logoDataUri,
       sign: signDataUri,
-      quotationDetails,
+      quotationDetails: orderedQuotationDetails,
       payment,
       validity,
       Delivery_charge,
@@ -146,15 +149,18 @@ return publicUrl;
 
 async function dowellspdf(quotationDetails, payment, Delivery_charge,cart_id, name, company_name) {
   try {
+    const orderedItems = Array.isArray(quotationDetails.items) ? quotationDetails.items : [];
+    const orderedQuotationDetails = { ...quotationDetails, items: orderedItems };
+
     // Load HTML template
     const templatePath = path.join(__dirname, 'templates', 'dowells.hbs');
     const templateHtml = fs.readFileSync(templatePath, 'utf8');
     
     // Compile template
     const template = Handlebars.compile(templateHtml);
-    console.log("pdf quotaion details",quotationDetails)
+    console.log("pdf quotaion details", orderedQuotationDetails)
     // For dowells items, calculate with discount
-    const totalAmount = quotationDetails.items.reduce(
+    const totalAmount = orderedItems.reduce(
       (sum, item) => sum + item.rate * item.quantity * (1 - (item.discount || 0) / 100),
       0
     );
@@ -172,7 +178,7 @@ async function dowellspdf(quotationDetails, payment, Delivery_charge,cart_id, na
     const context = {
       logo: logoDataUri,
       sign: signDataUri,
-      quotationDetails,
+      quotationDetails: orderedQuotationDetails,
       payment,
       Delivery_charge,
       validity: "7 days validity", // Default validity for dowells
@@ -258,6 +264,9 @@ return publicUrl;
 
 async function Rest3M(quotationDetails, payment, validity, Delivery_charge, cart_id, name, company_name) {
   try {
+    const orderedItems = Array.isArray(quotationDetails.items) ? quotationDetails.items : [];
+    const orderedQuotationDetails = { ...quotationDetails, items: orderedItems };
+
     // Load HTML template
     const templatePath = path.join(__dirname, 'templates', 'invoice-template.handlebars');
     const templateHtml = fs.readFileSync(templatePath, 'utf8');
@@ -266,7 +275,7 @@ async function Rest3M(quotationDetails, payment, validity, Delivery_charge, cart
     const template = Handlebars.compile(templateHtml);
     
     // Calculate totals
-    const totalAmount = quotationDetails.items.reduce(
+    const totalAmount = orderedItems.reduce(
       (sum, item) => sum + item.rate * item.quantity,
       0
     );
@@ -280,12 +289,12 @@ const logoDataUri = `data:image/jpeg;base64,${logoBase64}`;
 const signPath = path.resolve(__dirname, "templates", "signature_sheth.png");
     const signBase64 = fs.readFileSync(signPath, "base64");
     const signDataUri = `data:image/jpeg;base64,${signBase64}`;
-console.log("pdfs code ", quotationDetails)
+console.log("pdfs code ", orderedQuotationDetails)
     // Render HTML with data
     const context = {
       logo: logoDataUri,
       sign: signDataUri,
-      quotationDetails,
+      quotationDetails: orderedQuotationDetails,
       payment,
       validity,
       Delivery_charge,

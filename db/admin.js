@@ -19,61 +19,148 @@ async function executeQuery(query, values = []) {
     }
   }
 
+let ensureLineOrderReady;
+
+async function ensureLineOrderColumn() {
+  if (!ensureLineOrderReady) {
+    ensureLineOrderReady = (async () => {
+      await executeQuery(`
+        ALTER TABLE order_details
+        ADD COLUMN IF NOT EXISTS line_order INTEGER;
+      `);
+    })();
+  }
+
+  return ensureLineOrderReady;
+}
+
   const enquiriesDb = async (page, limit, datesort, statussort) => {
     try {
+        await ensureLineOrderColumn();
         const pageNumber = parseInt(page, 10) || 1;
         const limitNumber = parseInt(limit, 10) || 10;
         const offset = (pageNumber - 1) * limitNumber;
 
         console.info(`[INFO] Fetching enquiries | Page: ${pageNumber}, Limit: ${limitNumber}, DateSort: ${datesort}, StatusSort: ${statussort}`);
 
-        let query = `
-            SELECT 
-                cd.id AS cart_id,
-                cd.status AS cart_status,
-                cd.last_update AS cart_last_update,
-                cd.hs,
-                cd.dow,
-                cd.m3,
-                ud.name AS user_name,
-                ud.email AS user_email,
-                ud.phone AS user_phone,
-                od.order_id,
-                od.sku,
-                od.cat_no,
-                od.quantity,
-                dp.price AS product_price
-            FROM cart_details cd
-            INNER JOIN user_details ud ON cd.user_id = ud.id
-            INNER JOIN order_details od ON od.cart_id = cd.id
-            LEFT JOIN dowells_pricelist dp ON od.cat_no = dp.cat_no
-            WHERE cd.status NOT IN ('fulfilled', 'cancelled')
+      const values = [limitNumber, offset];
+      let statusFilter = "";
+
+      if (statussort && statussort !== "all" && statussort !== "true") {
+        values.push(statussort);
+        statusFilter = ` AND LOWER(cd.status) = LOWER($${values.length})`;
+      }
+
+      let cartSortClause = `
+        ORDER BY 
+          CASE 
+            WHEN cd.status = 'New' THEN 1
+            WHEN cd.status = 'Opened' THEN 2
+            ELSE 3
+          END,
+          cd.last_update DESC
+      `;
+
+      if (datesort === "true") {
+        cartSortClause = `ORDER BY cd.last_update DESC`;
+      } else if (statussort === "true") {
+        cartSortClause = `
+          ORDER BY 
+            CASE 
+              WHEN cd.status = 'Opened' THEN 1
+              WHEN cd.status = 'New' THEN 2
+              ELSE 3
+            END,
+            cd.last_update DESC
         `;
+      }
 
-        // Sorting logic
-        if (datesort === 'true') {
-            query += ` ORDER BY cd.last_update DESC`;
-        } else if (statussort === 'true') {
-            query += ` ORDER BY 
-                CASE 
-                    WHEN cd.status = 'Opened' THEN 1
-                    WHEN cd.status = 'New' THEN 2
-                    ELSE 3
-                END`;
-        } else {
-            query += ` ORDER BY 
-                CASE 
-                    WHEN cd.status = 'New' THEN 1
-                    WHEN cd.status = 'Opened' THEN 2
-                    ELSE 3
-                END`;
-        }
-
-        query += ` LIMIT $1 OFFSET $2;`;
+      const query = `
+        WITH paged_carts AS (
+          SELECT
+            cd.id,
+            cd.status,
+            cd.last_update,
+            cd.hs,
+            cd.dow,
+            cd.m3,
+            cd.user_id
+          FROM cart_details cd
+          WHERE cd.status NOT IN ('fulfilled', 'cancelled')${statusFilter}
+          ${cartSortClause}
+          LIMIT $1 OFFSET $2
+        )
+        SELECT
+          pc.id AS cart_id,
+          pc.status AS cart_status,
+          pc.last_update AS cart_last_update,
+          pc.hs,
+          pc.dow,
+          pc.m3,
+          ud.name AS user_name,
+          ud.email AS user_email,
+          ud.phone AS user_phone,
+          od.order_id,
+          od.sku, 
+          od.cat_no,
+          od.quantity,
+          q.price::numeric AS quoted_price,
+          qh.price::numeric AS historical_price,
+          qhf.price::numeric AS family_historical_price,
+          q.discount AS quoted_discount,
+          q.delivery AS quoted_delivery,
+          COALESCE(
+            q.price::numeric,
+            qh.price::numeric,
+            qhf.price::numeric,
+            NULLIF(REGEXP_REPLACE(dp.price::text, '[^0-9.\-]', '', 'g'), '')::numeric,
+            0::numeric
+          ) AS product_price
+        FROM paged_carts pc
+        INNER JOIN user_details ud ON pc.user_id = ud.id
+        INNER JOIN order_details od ON od.cart_id = pc.id
+        LEFT JOIN LATERAL (
+          SELECT price, discount, delivery
+          FROM quotation q
+          WHERE q.order_id = od.order_id AND q.cart_id = od.cart_id
+          ORDER BY q.id DESC
+          LIMIT 1
+        ) q ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT q2.price
+          FROM quotation q2
+          INNER JOIN order_details od2
+            ON od2.order_id = q2.order_id
+           AND od2.cart_id = q2.cart_id
+          WHERE q2.price IS NOT NULL
+            AND (
+              (od.sku IS NOT NULL AND od2.sku = od.sku)
+              OR
+              (od.cat_no IS NOT NULL AND od2.cat_no = od.cat_no)
+            )
+          ORDER BY q2.id DESC
+          LIMIT 1
+        ) qh ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT q3.price
+          FROM quotation q3
+          INNER JOIN order_details od3
+            ON od3.order_id = q3.order_id
+           AND od3.cart_id = q3.cart_id
+          WHERE q3.price IS NOT NULL
+            AND od.sku LIKE '3MH%'
+            AND od3.sku LIKE '3MH%'
+            AND REGEXP_REPLACE(od3.sku, '[0-9]{4}$', '') = REGEXP_REPLACE(od.sku, '[0-9]{4}$', '')
+          ORDER BY q3.id DESC
+          LIMIT 1
+        ) qhf ON TRUE
+        LEFT JOIN dowells_pricelist dp ON od.cat_no = dp.cat_no
+        ORDER BY pc.last_update DESC, pc.id DESC, COALESCE(od.line_order, 2147483647), od.order_id ASC;
+      `;
 
         console.info("[INFO] Final SQL Query:\n", query);
 
-        const rawData = await executeQuery(query, [limitNumber, offset]);
+      const rawData = await executeQuery(query, values);
 
         if (!rawData || rawData.length === 0) {
             console.warn("[WARN] No enquiries found with the given parameters.");
@@ -95,6 +182,11 @@ async function executeQuery(query, values = []) {
                 cat_no,
                 quantity,
                 product_price,
+                quoted_price,
+                historical_price,
+                family_historical_price,
+                quoted_discount,
+                quoted_delivery,
             } = row;
 
             let cart = acc.find((c) => c.cart_id === cart_id);
@@ -120,7 +212,12 @@ async function executeQuery(query, values = []) {
                 sku,
                 cat_no,
                 quantity,
-                product_price,
+              product_price: Number(product_price ?? 0),
+              quoted_price: quoted_price !== null ? Number(quoted_price) : null,
+              historical_price: historical_price !== null ? Number(historical_price) : null,
+              family_historical_price: family_historical_price !== null ? Number(family_historical_price) : null,
+              quoted_discount: quoted_discount !== null ? Number(quoted_discount) : null,
+              quoted_delivery: quoted_delivery !== null ? Number(quoted_delivery) : null,
             });
 
             return acc;
@@ -196,8 +293,8 @@ async function executeQuery(query, values = []) {
       validity,
     };
     console.log("array of hss",heatshrink)
-    for (const sku of heatshrink) {
-      const item = await fetchhsItemDetails(cart_id, sku);
+    for (const orderItem of heatshrink) {
+      const item = await fetchhsItemDetails(cart_id, orderItem);
       if (item) {
         quotationDetails.items.push(item);
       }
@@ -222,8 +319,8 @@ WHERE cd.id = $1
     const quotationDetails = {
       items: [],
     };
-    for (const cat_no of dowells) {
-      const item = await fetchdowellsItemDetails(cart_id, cat_no);
+    for (const orderItem of dowells) {
+      const item = await fetchdowellsItemDetails(cart_id, orderItem);
       if (item) {
         quotationDetails.items.push(item);
       }
@@ -249,8 +346,8 @@ WHERE cd.id = $1
       items: [],
       validity,
     };
-    for (const sku of m3) {
-      const item = await fetchrest3mItemDetails(cart_id, sku);
+    for (const orderItem of m3) {
+      const item = await fetchrest3mItemDetails(cart_id, orderItem);
       if (item) {
         quotationDetails.items.push(item);
       }
@@ -270,14 +367,15 @@ WHERE cd.id = $1
     return response;
   }
 
-  async function fetchhsItemDetails(cart_id, sku) {
+  async function fetchhsItemDetails(cart_id, orderItem) {
     try {
+      const { order_id, sku } = orderItem;
       const orderDetailsQuery = `
         SELECT order_id, quantity, technology, type, voltage, core, size, cabletype, conductor 
         FROM order_details 
-        WHERE cart_id = $1 AND sku = $2
+        WHERE cart_id = $1 AND order_id = $2
       `;
-      const orderDetailsResult = await executeQuery(orderDetailsQuery, [cart_id, sku]);
+      const orderDetailsResult = await executeQuery(orderDetailsQuery, [cart_id, order_id]);
       const orderDetails = orderDetailsResult[0];
       
       if (!orderDetails || !orderDetails.quantity) {
@@ -292,8 +390,8 @@ WHERE cd.id = $1
       `;
       const quotationResult = await executeQuery(quotationQuery, [orderDetails.order_id, cart_id]);
       console.log("quotationresult", quotationResult,orderDetails.order_id, cart_id)
-      const price = quotationResult[0].price;
-      const delivery = quotationResult[0].delivery;
+      const price = quotationResult[0]?.price;
+      const delivery = quotationResult[0]?.delivery;
       
       return {
         brand: "3M",
@@ -315,8 +413,9 @@ WHERE cd.id = $1
     }
   }
   
-  async function fetchdowellsItemDetails(cart_id,cat_no) {
+  async function fetchdowellsItemDetails(cart_id, orderItem) {
     try {
+      const { order_id, cat_no } = orderItem;
       const dowellsDetailsQuery = `
         SELECT description, cable_od_mm, hsn_code
         FROM dowells_pricelist 
@@ -334,9 +433,9 @@ WHERE cd.id = $1
       const orderDetailsQuery = `
         SELECT order_id, quantity
         FROM order_details 
-        WHERE cart_id = $1 AND cat_no = $2
+        WHERE cart_id = $1 AND order_id = $2
       `;
-      const orderDetailsResult = await executeQuery(orderDetailsQuery, [cart_id, cat_no]);
+      const orderDetailsResult = await executeQuery(orderDetailsQuery, [cart_id, order_id]);
       console.log("dowellsorderreuslt",orderDetailsResult)
       const orderDetails = orderDetailsResult[0];
       
@@ -352,9 +451,9 @@ WHERE cd.id = $1
       `;
       const quotationResult = await executeQuery(quotationQuery, [orderDetails.order_id, cart_id]);
       console.log("quotationresult",quotationResult)
-      const price = quotationResult[0].price;
-      const delivery = quotationResult[0].delivery;
-      const discount = quotationResult[0].discount;
+      const price = quotationResult[0]?.price;
+      const delivery = quotationResult[0]?.delivery;
+      const discount = quotationResult[0]?.discount;
       const catt = cat_no
 
       return {
@@ -375,14 +474,15 @@ WHERE cd.id = $1
     }
   }
   
-  async function fetchrest3mItemDetails(cart_id, sku) {
+  async function fetchrest3mItemDetails(cart_id, orderItem) {
     try {
+      const { order_id, sku } = orderItem;
       const orderDetailsQuery = `
         SELECT order_id, quantity, name
         FROM order_details 
-        WHERE cart_id = $1 AND sku = $2
+        WHERE cart_id = $1 AND order_id = $2
       `;
-      const orderDetailsResult = await executeQuery(orderDetailsQuery, [cart_id, sku]);
+      const orderDetailsResult = await executeQuery(orderDetailsQuery, [cart_id, order_id]);
       const orderDetails = orderDetailsResult[0];
   
       if (!orderDetails || !orderDetails.quantity) {
@@ -396,9 +496,9 @@ WHERE cd.id = $1
         WHERE order_id = $1 AND cart_id = $2
       `;
       const quotationResult = await executeQuery(quotationQuery, [orderDetails.order_id, cart_id]);
-      console.log("fetchrest3m",quotationResult, quotationResult[0].price)
-      const price = quotationResult[0].price;
-      const delivery = quotationResult[0].delivery;
+      console.log("fetchrest3m",quotationResult, quotationResult[0]?.price)
+      const price = quotationResult[0]?.price;
+      const delivery = quotationResult[0]?.delivery;
 
       return {
         brand: "3M",
@@ -416,10 +516,12 @@ WHERE cd.id = $1
 
   async function fetchAndCategorizeData(cartId) {
     try {
+      await ensureLineOrderColumn();
       const query = `
-        SELECT sku, cat_no 
+        SELECT order_id, sku, cat_no 
         FROM order_details 
-        WHERE cart_id = $1;
+        WHERE cart_id = $1
+        ORDER BY COALESCE(line_order, 2147483647), order_id ASC;
       `;
       const values = [cartId];
   
@@ -432,19 +534,19 @@ WHERE cd.id = $1
       const m3 = [];
       const dowells = [];
   
-      result.forEach(({ sku, cat_no }) => {
+        result.forEach(({ order_id, sku, cat_no }) => {
         // Check if `sku` is valid before calling startsWith
         if (sku) {
             if (sku.startsWith("3MHS") || sku.startsWith("3MHI") || sku.startsWith("3MHO")) {
-                heatshrink.push(sku);
+            heatshrink.push({ order_id, sku });
             } else {
-                m3.push(sku);
+            m3.push({ order_id, sku });
             }
         }
     
         // Check if `cat_no` is valid before adding it to `dowells`
         if (cat_no) {
-            dowells.push(cat_no);
+          dowells.push({ order_id, cat_no });
         }
     });
       return { heatshrink, m3, dowells };

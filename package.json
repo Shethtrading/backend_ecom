@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "dev": "node dev_index.js",
+    "start": "node index.js",
+    "migrate": "node scripts/run-migrations.js"
+  },
   "dependencies": {
     "aws-sdk": "^2.1692.0",
     "axios": "^1.7.9",
