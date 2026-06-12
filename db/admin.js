@@ -384,13 +384,14 @@ WHERE cd.id = $1
       }
       console.log("orderdeatils", orderDetails)
       const quotationQuery = `
-        SELECT price, delivery
+        SELECT price, discount, delivery
         FROM quotation 
         WHERE order_id = $1 AND cart_id = $2
       `;
       const quotationResult = await executeQuery(quotationQuery, [orderDetails.order_id, cart_id]);
       console.log("quotationresult", quotationResult,orderDetails.order_id, cart_id)
       const price = quotationResult[0]?.price;
+      const discount = quotationResult[0]?.discount;
       const delivery = quotationResult[0]?.delivery;
       
       return {
@@ -405,6 +406,7 @@ WHERE cd.id = $1
         conductor: orderDetails.conductor ?? "N/A",
         hsn: "85469090",
         rate: price ?? 0,
+        discount: discount ?? 0,
         delivery: delivery ?? 0
       };
     } catch (error) {
@@ -464,7 +466,7 @@ WHERE cd.id = $1
         hsn: dowellsDetails.hsn_code,             // ✅ Keeps correct value
         quantity: orderDetails.quantity ?? 0,
         rate: price ?? 0,
-        discount: discount,
+        discount: discount ?? 0,
         delivery: delivery ?? 0
       };
       
@@ -491,13 +493,14 @@ WHERE cd.id = $1
       }
   
       const quotationQuery = `
-        SELECT price, delivery
+        SELECT price, discount, delivery
         FROM quotation 
         WHERE order_id = $1 AND cart_id = $2
       `;
       const quotationResult = await executeQuery(quotationQuery, [orderDetails.order_id, cart_id]);
       console.log("fetchrest3m",quotationResult, quotationResult[0]?.price)
       const price = quotationResult[0]?.price;
+      const discount = quotationResult[0]?.discount;
       const delivery = quotationResult[0]?.delivery;
 
       return {
@@ -506,6 +509,7 @@ WHERE cd.id = $1
         description: orderDetails.name ?? 0,
         hsn: "85469090",
         rate: price ?? 0,
+        discount: discount ?? 0,
         delivery: delivery ?? 0
       };
     } catch (error) {

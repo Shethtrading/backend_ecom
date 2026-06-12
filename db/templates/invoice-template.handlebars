@@ -157,6 +157,7 @@
           <th>HSN</th>
           <th>Qty.</th>
           <th>Rate ₹</th>
+          <th>Discount %</th>
           <th>Amount ₹</th>
           <th>Delivery</th>
         </tr>
@@ -181,7 +182,8 @@
   <td>{{this.hsn}}</td>
   <td>{{this.quantity}}</td>
   <td class="text-right">{{this.rate}}</td>
-  <td class="text-right">{{multiply this.rate this.quantity}}</td>
+  <td class="text-right">{{this.discount}}%</td>
+  <td class="text-right">{{toFixed (multiply (multiply this.rate this.quantity) (multiply (subtract 100 this.discount) 0.01)) 2}}</td>
   <td>{{this.delivery}}</td>
 </tr>
 {{/each}}

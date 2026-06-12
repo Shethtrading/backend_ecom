@@ -46,7 +46,7 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
     
     // Calculate totals
     const totalAmount = orderedItems.reduce(
-      (sum, item) => sum + item.rate * item.quantity,
+      (sum, item) => sum + item.rate * item.quantity * (1 - (item.discount || 0) / 100),
       0
     );
     const delivery_amount = totalAmount + Number(Delivery_charge)
@@ -67,9 +67,9 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
       payment,
       validity,
       Delivery_charge,
-      totalAmount: totalAmount,
-      gstAmount: gstAmount,
-      grandTotal: grandTotal,
+      totalAmount: totalAmount.toFixed(2),
+      gstAmount: gstAmount.toFixed(2),
+      grandTotal: grandTotal.toFixed(2),
       currentDate: new Date().toLocaleDateString(),
       name,
         company_name,
@@ -276,7 +276,7 @@ async function Rest3M(quotationDetails, payment, validity, Delivery_charge, cart
     
     // Calculate totals
     const totalAmount = orderedItems.reduce(
-      (sum, item) => sum + item.rate * item.quantity,
+      (sum, item) => sum + item.rate * item.quantity * (1 - (item.discount || 0) / 100),
       0
     );
     const delivery_amount = totalAmount + Number(Delivery_charge)
