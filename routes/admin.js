@@ -46,7 +46,7 @@ router.post("/statusUpdate", async(req,res)=>{
         const response = await updateStatus(status, cart_id);
         res.status(200).json({success:true,response})
     } catch (error) {
-        console.error("error in /statusUpdate", error);
+        console.error("Error in /statusUpdate route:", error);
         res.status(500).json({success: false, message:"An error occured while updating status"})
     }
 })
@@ -98,7 +98,7 @@ router.post("/quotation", async (req, res) => {
 
           const normalizedRate = Number(rate);
           const normalizedDiscount = discount === "" || discount == null ? 0 : Number(discount);
-          const normalizedDelivery = delivery === "" || delivery == null ? 0 : Number(delivery);
+          const normalizedDelivery = delivery === "" || delivery == null ? "" : String(delivery);
 
           if (!Number.isFinite(normalizedRate) || normalizedRate < 0) {
             return res.status(400).json({
@@ -114,10 +114,10 @@ router.post("/quotation", async (req, res) => {
             });
           }
 
-          if (!Number.isFinite(normalizedDelivery) || normalizedDelivery < 0) {
+          if (normalizedDelivery.length > 255) {
             return res.status(400).json({
               success: false,
-              message: `Invalid delivery for order_id ${order_id}.`,
+              message: `Delivery for order_id ${order_id} is too long (max 255 characters).`,
             });
           }
 

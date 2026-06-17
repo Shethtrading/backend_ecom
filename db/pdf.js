@@ -136,10 +136,8 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
     };
     
     const s3Response = await s3.upload(uploadParams).promise();
-    console.log(`PDF uploaded successfully: ${s3Response.Location}`);
     const publicUrl = `${process.env.R2_PUBLIC_URL}/${s3Key}`;
-console.log("Public PDF URL:", publicUrl);
-return publicUrl;
+    return publicUrl;
 
   } catch (error) {
     console.error('Error generating PDF:', error);
@@ -158,7 +156,6 @@ async function dowellspdf(quotationDetails, payment, Delivery_charge,cart_id, na
     
     // Compile template
     const template = Handlebars.compile(templateHtml);
-    console.log("pdf quotaion details", orderedQuotationDetails)
     // For dowells items, calculate with discount
     const totalAmount = orderedItems.reduce(
       (sum, item) => sum + item.rate * item.quantity * (1 - (item.discount || 0) / 100),
@@ -251,10 +248,8 @@ async function dowellspdf(quotationDetails, payment, Delivery_charge,cart_id, na
     };
     
     const s3Response = await s3.upload(uploadParams).promise();
-    console.log(`PDF uploaded successfully: ${s3Response.Location}`);
     const publicUrl = `${process.env.R2_PUBLIC_URL}/${s3Key}`;
-console.log("Public PDF URL:", publicUrl);
-return publicUrl;
+    return publicUrl;
 
   } catch (error) {
     console.error('Error generating PDF:', error);
@@ -289,7 +284,6 @@ const logoDataUri = `data:image/jpeg;base64,${logoBase64}`;
 const signPath = path.resolve(__dirname, "templates", "signature_sheth.png");
     const signBase64 = fs.readFileSync(signPath, "base64");
     const signDataUri = `data:image/jpeg;base64,${signBase64}`;
-console.log("pdfs code ", orderedQuotationDetails)
     // Render HTML with data
     const context = {
       logo: logoDataUri,
@@ -366,9 +360,7 @@ console.log("pdfs code ", orderedQuotationDetails)
       ContentType: 'application/pdf',
     };
     const s3Response = await s3.upload(uploadParams).promise();
-    console.log(`PDF uploaded successfully: ${s3Response.Location}`);
     const publicUrl = `${process.env.R2_PUBLIC_URL}/${s3Key}`;
-    console.log("Public PDF URL:", publicUrl);
     return publicUrl;
 
   } catch (error) {

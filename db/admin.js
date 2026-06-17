@@ -41,8 +41,6 @@ async function ensureLineOrderColumn() {
         const limitNumber = parseInt(limit, 10) || 10;
         const offset = (pageNumber - 1) * limitNumber;
 
-        console.info(`[INFO] Fetching enquiries | Page: ${pageNumber}, Limit: ${limitNumber}, DateSort: ${datesort}, StatusSort: ${statussort}`);
-
       const values = [limitNumber, offset];
       let statusFilter = "";
 
@@ -158,13 +156,7 @@ async function ensureLineOrderColumn() {
         ORDER BY pc.last_update DESC, pc.id DESC, COALESCE(od.line_order, 2147483647), od.order_id ASC;
       `;
 
-        console.info("[INFO] Final SQL Query:\n", query);
-
       const rawData = await executeQuery(query, values);
-
-        if (!rawData || rawData.length === 0) {
-            console.warn("[WARN] No enquiries found with the given parameters.");
-        }
 
         const groupedData = rawData.reduce((acc, row) => {
             const {
@@ -217,7 +209,7 @@ async function ensureLineOrderColumn() {
               historical_price: historical_price !== null ? Number(historical_price) : null,
               family_historical_price: family_historical_price !== null ? Number(family_historical_price) : null,
               quoted_discount: quoted_discount !== null ? Number(quoted_discount) : null,
-              quoted_delivery: quoted_delivery !== null ? Number(quoted_delivery) : null,
+              quoted_delivery: quoted_delivery !== null ? String(quoted_delivery) : null,
             });
 
             return acc;
@@ -253,7 +245,6 @@ async function ensureLineOrderColumn() {
   }
 
   async function finalizeQuotation(cart_id, heatshrink, dowells, m3, payment, validity, Delivery_charge) {
-  console.log("heatshrink", heatshrink, "dowells", dowells, "m3", m3);
   try {
     const results = {};
     let deliveryChargeUsed = false; // Track if delivery charge has been applied
@@ -292,7 +283,6 @@ async function ensureLineOrderColumn() {
       items: [],
       validity,
     };
-    console.log("array of hss",heatshrink)
     for (const orderItem of heatshrink) {
       const item = await fetchhsItemDetails(cart_id, orderItem);
       if (item) {
@@ -309,13 +299,11 @@ WHERE cd.id = $1
 
     const userDetailsResult = await executeQuery(userDetailsQuery, [cart_id]);
     const userDetails = userDetailsResult[0];
-    console.log(userDetails)
     const response = await heatshrinkpdf(quotationDetails, payment,validity, Delivery_charge,cart_id, userDetails.name, userDetails.company_name);
     return response;
   }
   
   async function processDowells( cart_id,dowells, payment, Delivery_charge) {
-    console.log("dowells", dowells)
     const quotationDetails = {
       items: [],
     };
@@ -335,8 +323,6 @@ WHERE cd.id = $1
 
     const userDetailsResult = await executeQuery(userDetailsQuery, [cart_id]);
     const userDetails = userDetailsResult[0];
-    console.log(userDetails)
-    console.log("final check before pdf sent ", quotationDetails)
     const response = await dowellspdf(quotationDetails, payment, Delivery_charge,cart_id,userDetails.name, userDetails.company_name);
     return response;
   }
@@ -362,7 +348,6 @@ WHERE cd.id = $1
 
     const userDetailsResult = await executeQuery(userDetailsQuery, [cart_id]);
     const userDetails = userDetailsResult[0];
-    console.log(userDetails)
     const response = await Rest3M(quotationDetails, payment, validity, Delivery_charge,cart_id,userDetails.name, userDetails.company_name);
     return response;
   }
@@ -382,14 +367,13 @@ WHERE cd.id = $1
         console.error(`Missing required fields for cart_id: ${cart_id} and sku: ${sku}`);
         return null;
       }
-      console.log("orderdeatils", orderDetails)
       const quotationQuery = `
         SELECT price, discount, delivery
         FROM quotation 
         WHERE order_id = $1 AND cart_id = $2
+        ORDER BY id DESC LIMIT 1
       `;
       const quotationResult = await executeQuery(quotationQuery, [orderDetails.order_id, cart_id]);
-      console.log("quotationresult", quotationResult,orderDetails.order_id, cart_id)
       const price = quotationResult[0]?.price;
       const discount = quotationResult[0]?.discount;
       const delivery = quotationResult[0]?.delivery;
@@ -407,7 +391,7 @@ WHERE cd.id = $1
         hsn: "85469090",
         rate: price ?? 0,
         discount: discount ?? 0,
-        delivery: delivery ?? 0
+        delivery: delivery ?? ""
       };
     } catch (error) {
       console.error(`Error fetching details for cart_id: ${cart_id} and sku: ${sku}`, error);
@@ -424,9 +408,7 @@ WHERE cd.id = $1
         WHERE cat_no = $1 
       `;
       const dowellsDetailsResult = await executeQuery(dowellsDetailsQuery, [cat_no]); 
-      console.log("dowellsreuslt",dowellsDetailsResult)
       const dowellsDetails = dowellsDetailsResult[0];
-      console.log("testting dowells pdf", dowellsDetails.description,dowellsDetails.cable_od_mm,dowellsDetails.hsn_code)
       if (!dowellsDetails) {
         console.error(`Missing required fields for cat_no: ${cat_no} `);
         return null;
@@ -438,7 +420,6 @@ WHERE cd.id = $1
         WHERE cart_id = $1 AND order_id = $2
       `;
       const orderDetailsResult = await executeQuery(orderDetailsQuery, [cart_id, order_id]);
-      console.log("dowellsorderreuslt",orderDetailsResult)
       const orderDetails = orderDetailsResult[0];
       
       if (!orderDetails || !orderDetails.quantity) {
@@ -450,9 +431,9 @@ WHERE cd.id = $1
         SELECT price,discount, delivery
         FROM quotation 
         WHERE order_id = $1 AND cart_id = $2
+        ORDER BY id DESC LIMIT 1
       `;
       const quotationResult = await executeQuery(quotationQuery, [orderDetails.order_id, cart_id]);
-      console.log("quotationresult",quotationResult)
       const price = quotationResult[0]?.price;
       const delivery = quotationResult[0]?.delivery;
       const discount = quotationResult[0]?.discount;
@@ -467,7 +448,7 @@ WHERE cd.id = $1
         quantity: orderDetails.quantity ?? 0,
         rate: price ?? 0,
         discount: discount ?? 0,
-        delivery: delivery ?? 0
+        delivery: delivery ?? ""
       };
       
     } catch (error) {
@@ -496,9 +477,9 @@ WHERE cd.id = $1
         SELECT price, discount, delivery
         FROM quotation 
         WHERE order_id = $1 AND cart_id = $2
+        ORDER BY id DESC LIMIT 1
       `;
       const quotationResult = await executeQuery(quotationQuery, [orderDetails.order_id, cart_id]);
-      console.log("fetchrest3m",quotationResult, quotationResult[0]?.price)
       const price = quotationResult[0]?.price;
       const discount = quotationResult[0]?.discount;
       const delivery = quotationResult[0]?.delivery;
@@ -510,7 +491,7 @@ WHERE cd.id = $1
         hsn: "85469090",
         rate: price ?? 0,
         discount: discount ?? 0,
-        delivery: delivery ?? 0
+        delivery: delivery ?? ""
       };
     } catch (error) {
       console.error(`Error fetching details for cart_id: ${cart_id} and sku: ${sku}`, error);
@@ -619,7 +600,6 @@ WHERE cd.id = $1
                 SET ${updateFields.join(", ")}
                 WHERE order_id = $${paramIndex} AND cart_id = $${paramIndex + 1};
             `;
-            console.log("Executing UPDATE:", updateValues, order_id, cart_id);
             await executeQuery(updateOrderQuery, [...updateValues, String(order_id), Number(cart_id)]);
         }
 

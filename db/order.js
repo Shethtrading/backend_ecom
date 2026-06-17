@@ -85,7 +85,6 @@ async function storeDataInDb(orderDetails, orderId) {
 
   try {
     const result = await executeQuery(query, values);
-    console.log("Data inserted successfully:", result[0]);
     return result[0];
   } catch (error) {
     console.error("Error inserting data:", error);
@@ -100,7 +99,6 @@ async function findUserByEmail(email) {
 
   const query = "SELECT id FROM user_details WHERE LOWER(email) = LOWER($1)";
   const result = await executeQuery(query, [email.trim()]);
-  console.log(result)
   if (!result || result.length == 0) {
     return null; // Return null if user is not found
   }
@@ -123,8 +121,6 @@ async function userDb(name, company_name, email, phone) {
       `;
       const updateValues = [name, company_name, phone, email];
       const updateResult = await executeQuery(updateQuery, updateValues);
-
-      console.log("User data updated successfully:", updateResult[0]);
       return updateResult[0].id;
     } else {
       // Email does not exist, insert new record
@@ -135,8 +131,6 @@ async function userDb(name, company_name, email, phone) {
       `;
       const insertValues = [name, company_name, email, phone];
       const insertResult = await executeQuery(insertQuery, insertValues);
-
-      console.log("User data inserted successfully:", insertResult[0]);
       return insertResult[0].id;
     }
   } catch (error) {
@@ -149,12 +143,9 @@ async function userDb(name, company_name, email, phone) {
 async function processOrderData(orderIds, email, status) {
   try {
     await ensureLineOrderColumn();
-    console.log(orderIds, email, status)
     const userQuery = "SELECT id FROM user_details WHERE email = $1";
     const userResult = await executeQuery(userQuery, [email]);
-    console.log(userResult)
-    console.log(userResult[0].id)
-    const userId = userResult[0].id;
+    const userId = userResult[0] ? userResult[0].id : null;
     if (!userId) {
       throw new Error("User not found for the given email");
     }
@@ -185,7 +176,6 @@ async function processOrderData(orderIds, email, status) {
         console.warn(`Order ID ${orderId} not found in order_details`);
       }
     }
-    console.log(cartId)
     return { cartId }
   } catch (error) {
     console.error("Error in processOrderData:", error);
@@ -236,8 +226,6 @@ async function deleteCartItem(order_id) {
 }
 
 async function enquireMail(email, cart_id, subject) {
-  console.log("[DEBUG] enquireMail() called with:", { email, cart_id, subject });
-
   try {
     await ensureLineOrderColumn();
     const query = `
@@ -246,21 +234,16 @@ async function enquireMail(email, cart_id, subject) {
       WHERE cart_id = $1
       ORDER BY COALESCE(line_order, 2147483647), order_id ASC
     `;
-    console.log("[DEBUG] Executinag query for cart_id:", cart_id);
     const result = await executeQuery(query, [cart_id]);
-    console.log("[DEBUG] Query result:", result);
-    console.log("[DEBUG] Number of items found:", result.length);
 
     if (result.length === 0) {
-      console.log("[DEBUG] WARNING: No items found for cart_id:", cart_id);
+      console.warn("No items found for cart_id:", cart_id);
     }
 
     // Compile template
     const templatePath = path.join(__dirname, "templates", "emailTemplate.hbs");
-    console.log("[DEBUG] Template path:", templatePath);
     const templateSource = fs.readFileSync(templatePath, "utf-8");
     const template = handlebars.compile(templateSource);
-    console.log("[DEBUG] Template compiled successfully");
 
     handlebars.registerHelper("inc", v => parseInt(v) + 1);
 
@@ -268,16 +251,10 @@ async function enquireMail(email, cart_id, subject) {
       name: row.name,
       quantity: row.quantity
     }));
-    console.log("[DEBUG] Items for email:", items);
 
     const signatureUrl = process.env.SIGNATURE_IMAGE_URL || DEFAULT_SIGNATURE_URL;
-    console.log("[DEBUG] Signature URL used:", signatureUrl);
 
     const htmlMessage = template({ cart_id, items, signatureUrl });
-    console.log("[DEBUG] HTML message generated (length):", htmlMessage.length);
-
-    console.log("[DEBUG] Calling sendEmail()...");
-    console.log("[DEBUG] sendEmail params:", { to: email, subject });
 
     await sendEmail({
       to: email,
@@ -286,13 +263,10 @@ async function enquireMail(email, cart_id, subject) {
       attachments: []
     });
 
-    console.log("[DEBUG] sendEmail() completed successfully!");
     return true;
 
   } catch (err) {
-    console.error("[DEBUG] ERROR in enquireMail:", err);
-    console.error("[DEBUG] Error message:", err.message);
-    console.error("[DEBUG] Error stack:", err.stack);
+    console.error("Error in enquireMail helper:", err);
     throw new Error("Error sending enquiry email: " + err.message);
   }
 }

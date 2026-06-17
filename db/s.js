@@ -34,8 +34,4 @@ function transformInput(inputArray) {
       name: "Dowell's Lugs Copper Fork-Type Insulated",
       route: "/dowells/lugs/copper/fork-type/insulated"
     }
-  ];
-  
-  const result = transformInput(inputArray);
-  console.log(result);
-  
+  ];

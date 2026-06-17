@@ -60,7 +60,6 @@ router.post("/order", async (req, res) => {
 router.post("/user", async (req, res) => {
   try {
     const { name, company_name, email, phone } = req.body;
-    console.log(name,company_name,email,phone)
     const id = await userDb(name, company_name, email, phone);
     res.status(201).json({ success: true, userId: id });
   } catch (error) {
@@ -78,9 +77,7 @@ router.post("/create", async (req, res) => {
     if (!email || !Array.isArray(orderIds)) {
       return res.status(400).json({ success: false, message: "Invalid input data" });
     }
-    console.log("here is the route data ",orderIds, email)
     const response = await processOrderData(orderIds, email, "New");
-    console.log(response.cartId)
     res.status(201).json({ success: true, message: "Data processed successfully", cart_id : response.cartId });
   } catch (error) {
     console.error("Error in /create route:", error);
@@ -162,7 +159,7 @@ router.post("/mailSub", async (req, res) => {
     const newSubscription = await insertSubscription(email);
     res.status(201).json({ success: true, data: newSubscription });
   } catch (error) {
-    console.error(error);
+    console.error("Error in /mailSub route:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
@@ -177,7 +174,7 @@ router.post("/userForm", async (req, res) => {
     const newMessage = await insertUserMessage(name, email, phone, subject, body);
     res.status(201).json({ success: true, data: newMessage });
   } catch (error) {
-    console.error(error);
+    console.error("Error in /userForm route:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
