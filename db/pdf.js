@@ -5,7 +5,7 @@ const path = require('path');
 const AWS = require('aws-sdk');
 
 // Register Handlebars helpers
-Handlebars.registerHelper('multiply', function(a, b) {
+Handlebars.registerHelper('multiply', function (a, b) {
   return a * b;
 });
 
@@ -15,11 +15,11 @@ Handlebars.registerHelper('toFixed', function (number, digits) {
 
 
 // Register additional Handlebars helpers
-Handlebars.registerHelper('add', function(a, b) {
+Handlebars.registerHelper('add', function (a, b) {
   return a + b;
 });
 
-Handlebars.registerHelper('subtract', function(a, b) {
+Handlebars.registerHelper('subtract', function (a, b) {
   return a - b;
 });
 
@@ -32,7 +32,7 @@ const s3 = new AWS.S3({
   signatureVersion: "v4", // required for R2
 });
 
-async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charge,cart_id, name, company_name) {
+async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charge, cart_id, name, company_name) {
   try {
     const orderedItems = Array.isArray(quotationDetails.items) ? quotationDetails.items : [];
     const orderedQuotationDetails = { ...quotationDetails, items: orderedItems };
@@ -40,10 +40,10 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
     // Load HTML template
     const templatePath = path.join(__dirname, 'templates', 'invoice-template.handlebars');
     const templateHtml = fs.readFileSync(templatePath, 'utf8');
-    
+
     // Compile template
     const template = Handlebars.compile(templateHtml);
-    
+
     // Calculate totals
     const totalAmount = orderedItems.reduce(
       (sum, item) => sum + item.rate * item.quantity * (1 - (item.discount || 0) / 100),
@@ -52,7 +52,7 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
     const delivery_amount = totalAmount + Number(Delivery_charge)
     const gstAmount = delivery_amount * 0.18;
     const grandTotal = delivery_amount + gstAmount;
-    
+
     const logoPath = path.resolve(__dirname, "templates", "sheth_logo.jpg");
     const logoBase64 = fs.readFileSync(logoPath, "base64");
     const logoDataUri = `data:image/jpeg;base64,${logoBase64}`;
@@ -72,19 +72,19 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
       grandTotal: grandTotal.toFixed(2),
       currentDate: new Date().toLocaleDateString(),
       name,
-        company_name,
+      company_name,
       hss: true
     };
-    
+
     const html = template(context);
-    
+
     // Launch headless browser
-    const browser = await puppeteer.launch({ 
+    const browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
-    
+
     // Set content and configure page
     await page.setContent(html, { waitUntil: 'networkidle0' });
     await page.addStyleTag({
@@ -94,7 +94,7 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
           margin: 0;
         }
         body {
-          margin: 1.5cm;
+          margin: 1.5cm 1.5cm 1.5cm 0.3cm;
         }
         table {
           width: 100%;
@@ -114,27 +114,27 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
         }
       `
     });
-    
+
     // Generate PDF
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: { top: '0', right: '0', bottom: '0', left: '0' }
     });
-    
+
     await browser.close();
-    
+
     // Upload to S3
     const randomThreeDigit = Math.floor(100 + Math.random() * 900);
     const s3Key = `3M_HS_${cart_id}_${randomThreeDigit}.pdf`;
-    
+
     const uploadParams = {
       Bucket: process.env.R2_Bucket_Name,
       Key: s3Key,
       Body: pdfBuffer,
       ContentType: 'application/pdf',
     };
-    
+
     const s3Response = await s3.upload(uploadParams).promise();
     const publicUrl = `${process.env.R2_PUBLIC_URL}/${s3Key}`;
     return publicUrl;
@@ -145,7 +145,7 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
   }
 }
 
-async function dowellspdf(quotationDetails, payment, Delivery_charge,cart_id, name, company_name) {
+async function dowellspdf(quotationDetails, payment, Delivery_charge, cart_id, name, company_name) {
   try {
     const orderedItems = Array.isArray(quotationDetails.items) ? quotationDetails.items : [];
     const orderedQuotationDetails = { ...quotationDetails, items: orderedItems };
@@ -153,7 +153,7 @@ async function dowellspdf(quotationDetails, payment, Delivery_charge,cart_id, na
     // Load HTML template
     const templatePath = path.join(__dirname, 'templates', 'dowells.hbs');
     const templateHtml = fs.readFileSync(templatePath, 'utf8');
-    
+
     // Compile template
     const template = Handlebars.compile(templateHtml);
     // For dowells items, calculate with discount
@@ -184,19 +184,19 @@ async function dowellspdf(quotationDetails, payment, Delivery_charge,cart_id, na
       grandTotal: grandTotal.toFixed(2),
       currentDate: new Date().toLocaleDateString(),
       name,
-        company_name,
+      company_name,
       includeDiscount: true // Flag to show discount column in template
     };
-    
+
     const html = template(context);
-    
+
     // Launch headless browser
-    const browser = await puppeteer.launch({ 
+    const browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
-    
+
     // Set content and configure page
     await page.setContent(html, { waitUntil: 'networkidle0' });
     await page.addStyleTag({
@@ -206,7 +206,7 @@ async function dowellspdf(quotationDetails, payment, Delivery_charge,cart_id, na
           margin: 0;
         }
         body {
-          margin: 1.5cm;
+          margin: 1.5cm 1.5cm 1.5cm 0.3cm;
         }
         table {
           width: 100%;
@@ -226,27 +226,27 @@ async function dowellspdf(quotationDetails, payment, Delivery_charge,cart_id, na
         }
       `
     });
-    
+
     // Generate PDF
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: { top: '0', right: '0', bottom: '0', left: '0' }
     });
-    
+
     await browser.close();
-    
+
     // Upload to S3
     const randomThreeDigit = Math.floor(100 + Math.random() * 900);
     const s3Key = `DOWELLS_${cart_id}_${randomThreeDigit}.pdf`;
-    
+
     const uploadParams = {
       Bucket: process.env.R2_Bucket_Name,
       Key: s3Key,
       Body: pdfBuffer,
       ContentType: 'application/pdf',
     };
-    
+
     const s3Response = await s3.upload(uploadParams).promise();
     const publicUrl = `${process.env.R2_PUBLIC_URL}/${s3Key}`;
     return publicUrl;
@@ -265,10 +265,10 @@ async function Rest3M(quotationDetails, payment, validity, Delivery_charge, cart
     // Load HTML template
     const templatePath = path.join(__dirname, 'templates', 'invoice-template.handlebars');
     const templateHtml = fs.readFileSync(templatePath, 'utf8');
-    
+
     // Compile template
     const template = Handlebars.compile(templateHtml);
-    
+
     // Calculate totals
     const totalAmount = orderedItems.reduce(
       (sum, item) => sum + item.rate * item.quantity * (1 - (item.discount || 0) / 100),
@@ -278,10 +278,10 @@ async function Rest3M(quotationDetails, payment, validity, Delivery_charge, cart
     const gstAmount = delivery_amount * 0.18;
     const grandTotal = delivery_amount + gstAmount;
 
-const logoPath = path.resolve(__dirname, "templates", "sheth_logo.jpg");
-const logoBase64 = fs.readFileSync(logoPath, "base64");
-const logoDataUri = `data:image/jpeg;base64,${logoBase64}`;
-const signPath = path.resolve(__dirname, "templates", "signature_sheth.png");
+    const logoPath = path.resolve(__dirname, "templates", "sheth_logo.jpg");
+    const logoBase64 = fs.readFileSync(logoPath, "base64");
+    const logoDataUri = `data:image/jpeg;base64,${logoBase64}`;
+    const signPath = path.resolve(__dirname, "templates", "signature_sheth.png");
     const signBase64 = fs.readFileSync(signPath, "base64");
     const signDataUri = `data:image/jpeg;base64,${signBase64}`;
     // Render HTML with data
@@ -296,20 +296,20 @@ const signPath = path.resolve(__dirname, "templates", "signature_sheth.png");
       gstAmount: gstAmount.toFixed(2),
       grandTotal: grandTotal.toFixed(2),
       currentDate: new Date().toLocaleDateString(),
-       name,
-        company_name,
+      name,
+      company_name,
       isRest3M: true // Flag to identify Rest3M quotation
     };
-    
+
     const html = template(context);
-    
+
     // Launch headless browser
-    const browser = await puppeteer.launch({ 
+    const browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
-    
+
     // Set content and configure page
     await page.setContent(html, { waitUntil: 'networkidle0' });
     await page.addStyleTag({
@@ -319,7 +319,7 @@ const signPath = path.resolve(__dirname, "templates", "signature_sheth.png");
           margin: 0;
         }
         body {
-          margin: 1.5cm;
+          margin: 1.5cm 1.5cm 1.5cm 0.3cm;
         }
         table {
           width: 100%;
@@ -339,20 +339,20 @@ const signPath = path.resolve(__dirname, "templates", "signature_sheth.png");
         }
       `
     });
-    
+
     // Generate PDF
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: { top: '0', right: '0', bottom: '0', left: '0' }
     });
-    
+
     await browser.close();
-    
+
     // Upload to S3 with the same naming convention as before
     const randomThreeDigit = Math.floor(100 + Math.random() * 900);
     const s3Key = `3M_MRO_${cart_id}_${randomThreeDigit}.pdf`;
-    
+
     const uploadParams = {
       Bucket: process.env.R2_Bucket_Name,
       Key: s3Key,

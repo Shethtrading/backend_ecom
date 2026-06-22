@@ -11,8 +11,8 @@
       line-height: 1.5;
     }
     .container {
-      max-width: 210mm;
-      margin: 0 auto;
+      max-width: 100%;
+      margin: 0;
     }
     .header {
       display: flex;
@@ -141,9 +141,8 @@
       <thead>
         <tr>
           <th>Sl.</th>
-          <th>Brand</th>
+          <th>Brand / Technology</th>
           {{#if hss}}
-          <th>Technology</th>
           <th>Type</th>
           <th>Voltage</th>
           <th>Core</th>
@@ -166,9 +165,11 @@
         {{#each quotationDetails.items}}
 <tr>
   <td>{{add @index 1}}</td>
-  <td>{{this.brand}}</td>
+  <td>
+    {{this.brand}}
+    {{#if ../hss}} — {{this.technology}}{{/if}}
+  </td>
   {{#if ../hss}}
-    <td>{{this.technology}}</td>
     <td>{{this.type}}</td>
     <td>{{this.voltage}}</td>
     <td>{{this.core}}</td>
@@ -176,7 +177,7 @@
     <td>{{this.cableType}}</td>
     <td>{{this.conductor}}</td>
   {{/if}}
-  {{#if ../isRest3M}}  <!-- Use ../isRest3M -->
+  {{#if ../isRest3M}}
     <td>{{this.description}}</td>
   {{/if}}
   <td>{{this.hsn}}</td>
