@@ -439,7 +439,7 @@ function extractSizeFromDescription(description) {
       }
       
       const orderDetailsQuery = `
-        SELECT order_id, quantity
+        SELECT order_id, quantity, size
         FROM order_details 
         WHERE cart_id = $1 AND order_id = $2
       `;
@@ -463,7 +463,7 @@ function extractSizeFromDescription(description) {
       const discount = quotationResult[0]?.discount;
       const catt = cat_no
 
-      let cableOd = dowellsDetails.cable_od_mm;
+      let cableOd = orderDetails.size || dowellsDetails.cable_od_mm;
       if (!cableOd || cableOd === "NOS" || cableOd.toLowerCase() === "nos") {
         const extracted = extractSizeFromDescription(dowellsDetails.description);
         if (extracted) {
