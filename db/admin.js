@@ -399,6 +399,30 @@ WHERE cd.id = $1
     }
   }
   
+function extractSizeFromDescription(description) {
+  if (!description) return null;
+  
+  // 1. Check for "TO" range, e.g., "10 TO 35 SQ MM"
+  const toMatch = description.match(/(\d+(?:\.\d+)?)\s*TO\s*(\d+(?:\.\d+)?)/i);
+  if (toMatch) {
+    return `${toMatch[1]}-${toMatch[2]}`;
+  }
+
+  // 2. Check for ranges like "16.5-18.5", "07.0-14.0"
+  const rangeMatch = description.match(/(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)/);
+  if (rangeMatch) {
+    return `${rangeMatch[1]}-${rangeMatch[2]}`;
+  }
+
+  // 3. Try to match sizes followed by SQ MM, SQ-MM, or MM
+  const sizeMatch = description.match(/(\d+(?:\.\d+)?(?:[-\/]\d+(?:\.\d+)?)?)\s*(?:SQ[- ]?MM|Sq\.mm|MM)/i);
+  if (sizeMatch) {
+    return sizeMatch[1].trim();
+  }
+
+  return null;
+}
+
   async function fetchdowellsItemDetails(cart_id, orderItem) {
     try {
       const { order_id, cat_no } = orderItem;
@@ -439,10 +463,18 @@ WHERE cd.id = $1
       const discount = quotationResult[0]?.discount;
       const catt = cat_no
 
+      let cableOd = dowellsDetails.cable_od_mm;
+      if (!cableOd || cableOd === "NOS" || cableOd.toLowerCase() === "nos") {
+        const extracted = extractSizeFromDescription(dowellsDetails.description);
+        if (extracted) {
+          cableOd = extracted;
+        }
+      }
+
       return {
         brand: `Dowell's`,
         description: dowellsDetails.description,  // ✅ Keeps correct value
-        cableOd: dowellsDetails.cable_od_mm,
+        cableOd: cableOd,
         cat_no: catt,
         hsn: dowellsDetails.hsn_code,             // ✅ Keeps correct value
         quantity: orderDetails.quantity ?? 0,
