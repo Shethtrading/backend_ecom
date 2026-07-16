@@ -81,7 +81,13 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
     // Launch headless browser
     const browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
     });
     const page = await browser.newPage();
 
@@ -193,7 +199,13 @@ async function dowellspdf(quotationDetails, payment, Delivery_charge, cart_id, n
     // Launch headless browser
     const browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
     });
     const page = await browser.newPage();
 
@@ -306,7 +318,13 @@ async function Rest3M(quotationDetails, payment, validity, Delivery_charge, cart
     // Launch headless browser
     const browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
     });
     const page = await browser.newPage();
 
