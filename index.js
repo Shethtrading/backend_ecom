@@ -13,7 +13,7 @@ app.set("trust proxy", 1);
 app.use(
   cors({
     credentials: true,
-    origin: "https://shethtrading.com",
+    origin: ["https://shethtrading.com", "http://localhost:3000"],
   })
 );
 
