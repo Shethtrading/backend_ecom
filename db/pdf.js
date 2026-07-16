@@ -1,4 +1,3 @@
-const puppeteer = require('puppeteer');
 const Handlebars = require('handlebars');
 const fs = require('fs');
 const path = require('path');
@@ -31,6 +30,34 @@ const s3 = new AWS.S3({
   region: "auto", // R2 always uses "auto"
   signatureVersion: "v4", // required for R2
 });
+
+async function getBrowser() {
+  const isVercel = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_VERSION;
+  if (isVercel) {
+    console.log("[PDF Generator] Launching browser via @sparticuz/chromium (Vercel serverless)");
+    const puppeteerCore = require("puppeteer-core");
+    const chromium = require("@sparticuz/chromium");
+    return await puppeteerCore.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+  } else {
+    console.log("[PDF Generator] Launching local/Render browser via standard puppeteer");
+    const puppeteer = require("puppeteer");
+    return await puppeteer.launch({
+      headless: 'new',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
+    });
+  }
+}
 
 async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charge, cart_id, name, company_name) {
   try {
@@ -79,16 +106,7 @@ async function heatshrinkpdf(quotationDetails, payment, validity, Delivery_charg
     const html = template(context);
 
     // Launch headless browser
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    });
+    const browser = await getBrowser();
     const page = await browser.newPage();
 
     // Set content and configure page
@@ -197,16 +215,7 @@ async function dowellspdf(quotationDetails, payment, Delivery_charge, cart_id, n
     const html = template(context);
 
     // Launch headless browser
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    });
+    const browser = await getBrowser();
     const page = await browser.newPage();
 
     // Set content and configure page
@@ -316,16 +325,7 @@ async function Rest3M(quotationDetails, payment, validity, Delivery_charge, cart
     const html = template(context);
 
     // Launch headless browser
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    });
+    const browser = await getBrowser();
     const page = await browser.newPage();
 
     // Set content and configure page

@@ -5,6 +5,7 @@
     "migrate": "node scripts/run-migrations.js"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^133.0.0",
     "aws-sdk": "^2.1692.0",
     "axios": "^1.7.9",
     "cookie-parser": "^1.4.7",
@@ -20,6 +21,7 @@
     "pdfkit": "^0.16.0",
     "pg": "^8.13.1",
     "puppeteer": "^24.4.0",
+    "puppeteer-core": "^24.4.0",
     "resend": "^6.6.0",
     "uuid": "^11.0.3",
     "xlsx": "^0.18.5",
