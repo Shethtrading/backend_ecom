@@ -77,7 +77,6 @@ router.post("/quotation", async (req, res) => {
 }
 
         const cart_id = items[0]?.cart_id;
-        console.log(`[Quotation Request] Starting quotation processing for cart_id: ${cart_id}`);
 
         const normalizedDeliveryCharges = Number(Delivery_Charges);
         if (!Number.isFinite(normalizedDeliveryCharges) || normalizedDeliveryCharges < 0) {
@@ -122,17 +121,11 @@ router.post("/quotation", async (req, res) => {
             });
           }
 
-          console.log(`[Quotation Request] Inserting/Updating quotation in DB: order_id=${order_id}, rate=${normalizedRate}, discount=${normalizedDiscount}`);
           await quotation(normalizedRate, normalizedDiscount, order_id, cart_id, normalizedDelivery);
         }
         
-        console.log(`[Quotation Request] Fetching and categorizing cart data for cart_id: ${cart_id}...`);
         const response = await fetchAndCategorizeData(cart_id);
-        console.log(`[Quotation Request] Categorized items:`, response);
-        
-        console.log(`[Quotation Request] Generating PDFs (finalizeQuotation)...`);
         const pdf_url = await finalizeQuotation(cart_id, response.heatshrink, response.dowells, response.m3, Payment, Validity, normalizedDeliveryCharges);
-        console.log(`[Quotation Request] PDF generation completed. URLs:`, pdf_url);
         
         const urls = [];
 
@@ -140,14 +133,9 @@ router.post("/quotation", async (req, res) => {
         if (pdf_url?.dowellsDetails) urls.push(pdf_url.dowellsDetails);
         if (pdf_url?.m3Details) urls.push(pdf_url.m3Details);        
         
-        console.log(`[Quotation Request] Sending quotation email via Resend...`);
         const mailResult = await quotation_mail(cart_id, Reply, pdf_url.heatshrinkDetails, pdf_url.dowellsDetails,  pdf_url.m3Details, urls )
-        console.log(`[Quotation Request] Email sending completed. Success: ${mailResult}`);
-        
-        console.log(`[Quotation Request] Updating status to 'Opened'...`);
         await updateStatus("Opened", cart_id, pdf_url.heatshrinkDetails, pdf_url.dowellsDetails,  pdf_url.m3Details)
         
-        console.log(`[Quotation Request] Completed successfully!`);
         res.status(200).json({ success: true, message: "quotation sent successfully",hs: pdf_url.heatshrinkDetails,dow: pdf_url.dowellsDetails, m3: pdf_url.m3Details});
     } catch (error) {
         console.error("[Quotation Request ERROR] Error in /quotation:", error);

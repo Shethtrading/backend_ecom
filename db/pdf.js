@@ -34,7 +34,6 @@ const s3 = new AWS.S3({
 async function getBrowser() {
   const isVercel = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_VERSION;
   if (isVercel) {
-    console.log("[PDF Generator] Launching browser via @sparticuz/chromium (Vercel serverless)");
     const puppeteerCore = require("puppeteer-core");
     const chromium = require("@sparticuz/chromium");
     return await puppeteerCore.launch({
@@ -44,7 +43,6 @@ async function getBrowser() {
       headless: chromium.headless,
     });
   } else {
-    console.log("[PDF Generator] Launching local/Render browser via standard puppeteer");
     const puppeteer = require("puppeteer");
     return await puppeteer.launch({
       headless: 'new',
