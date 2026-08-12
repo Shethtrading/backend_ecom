@@ -107,13 +107,19 @@ async function ensureLineOrderColumn() {
           qhf.price::numeric AS family_historical_price,
           q.discount AS quoted_discount,
           q.delivery AS quoted_delivery,
-          COALESCE(
-            q.price::numeric,
-            qh.price::numeric,
-            qhf.price::numeric,
-            NULLIF(REGEXP_REPLACE(dp.price::text, '[^0-9.\-]', '', 'g'), '')::numeric,
-            0::numeric
-          ) AS product_price
+          CASE 
+            WHEN od.cat_no IS NOT NULL THEN
+              COALESCE(
+                q.price::numeric,
+                NULLIF(REGEXP_REPLACE(dp.price::text, '[^0-9.\-]', '', 'g'), '')::numeric,
+                0::numeric
+              )
+            ELSE
+              COALESCE(
+                q.price::numeric,
+                0::numeric
+              )
+          END AS product_price
         FROM paged_carts pc
         INNER JOIN user_details ud ON pc.user_id = ud.id
         INNER JOIN order_details od ON od.cart_id = pc.id
